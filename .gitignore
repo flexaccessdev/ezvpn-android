@@ -15,3 +15,6 @@ local.properties
 
 tmp/
 CLAUDE.local.md
+
+# Release APKs from scripts/build-release-apk.sh
+dist/

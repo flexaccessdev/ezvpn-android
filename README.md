@@ -46,6 +46,23 @@ the core repo (tag + sha256 in `gradle.properties`) and unpacks the
 Pin a newer core release with `scripts/bump-jnilibs.sh <tag>` (rewrites the
 tag, the sha256, and the app version in `gradle.properties`).
 
+CI (`.github/workflows/ci.yml`) runs the tests and uploads the debug APK of
+every push/PR as the `app-debug` workflow artifact.
+
+### Release APK
+
+```bash
+scripts/build-release-apk.sh            # → dist/ezvpn-android-<version>.apk
+scripts/build-release-apk.sh --unsigned # no signing (not installable as is)
+```
+
+The release key is a keystore outside the repo (default
+`~/.config/ezvpn-android/release.jks`, override with `EZVPN_KEYSTORE`;
+password from `EZVPN_KEYSTORE_PASSWORD` or prompted). The script creates it on
+first use — back it up, devices only accept updates signed with the same key.
+A release build cannot be installed over a debug build of the app (different
+signature); uninstall the other one first.
+
 ### Local FFI development
 
 To run against a local build of the core instead of the pinned release, build
