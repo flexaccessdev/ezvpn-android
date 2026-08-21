@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: tunnelcore unit tests
+        run: ./gradlew :tunnelcore:test --console=plain
+
+      # The APK must carry the pinned release's libezvpn.so: refuse to build one
+      # without a valid pin rather than publish an artifact with no native
+      # library in it (pin with scripts/bump-jnilibs.sh <tag>).
+      - name: Check the ezvpn release pin
+        run: |
+          if ! grep -qE '^ezvpn.releaseSha256=[0-9a-f]{64}$' gradle.properties; then
+            echo "::error::gradle.properties has no valid ezvpn.releaseSha256; pin a published ezvpn release with scripts/bump-jnilibs.sh <tag>"
+            exit 1
+          fi
+
+      - name: App unit tests + debug APK
+        run: ./gradlew :app:testDebugUnitTest :app:assembleDebug --console=plain
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk

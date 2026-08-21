@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="1024"
+    android:viewportHeight="1024">
+    <!-- Scaled about the centre so the shield (stroke included) stays inside
+         the adaptive-icon safe zone (the central 66/108 circle); launchers
+         mask anything outside it. -->
+    <group
+        android:scaleX="0.75"
+        android:scaleY="0.75"
+        android:pivotX="512"
+        android:pivotY="512">
+    <path
+        android:pathData="M512,215.04 Q658.432,215.04 778.24,256 L778.24,512 Q778.24,716.8 512,808.96 Q245.76,716.8 245.76,512 L245.76,256 Q365.568,215.04 512,215.04 Z"
+        android:strokeColor="#FFFFFFFF"
+        android:strokeWidth="51.2"
+        android:strokeLineJoin="round"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M512,460.8 m-66.56,0 a66.56,66.56 0 1,0 133.12,0 a66.56,66.56 0 1,0 -133.12,0"
+        android:fillColor="#FFFFFFFF" />
+    <path
+        android:pathData="M483.328,465.92 L540.672,465.92 L565.248,614.4 L458.752,614.4 Z"
+        android:fillColor="#FFFFFFFF" />
+    </group>
+</vector>
