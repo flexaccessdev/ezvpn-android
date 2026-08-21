@@ -25,7 +25,7 @@ Design and the JNI contract are documented in the core repo:
 - An Android 10+ (`minSdk` 29) target. Development is done against the
   emulator (`10.22.35.66:5555`, an arm64 Android VM bridged onto the LAN like a
   phone; `adb connect 10.22.35.66`) — a `VpnService` cannot be exercised on the
-  JVM. The physical device (`10.22.38.204:51035`) is reserved for installing
+  JVM. The physical device (`10.22.38.204:5555`) is reserved for installing
   the signed release APK and is never used for development.
 - For FFI work: the sibling `../ezvpn` checkout, the Android NDK and
   `cargo-ndk` (see that repo's `build-android.sh`).
@@ -69,10 +69,15 @@ signature); uninstall the other one first.
 The signed APK is the only thing that goes on the physical device:
 
 ```bash
-scripts/install-release-apk.sh           # dist/ezvpn-android-<version>.apk → 10.22.38.204:51035
+scripts/install-release-apk.sh           # dist/ezvpn-android-<version>.apk → 10.22.38.204:5555
 scripts/install-release-apk.sh --build   # build it first
 scripts/install-release-apk.sh --launch  # and start the app
 ```
+
+The tablet listens on a fixed port because `persist.adb.tcp.port=5555` was
+set on it as root (Developer options → Rooted debugging, then `adb root` and
+`adb shell setprop persist.adb.tcp.port 5555`); Android's *Wireless debugging*
+mode would pick a new random port on every toggle or reboot.
 
 It verifies the signature with `apksigner` and refuses unsigned or
 debug-signed APKs, and refuses to target the emulator
