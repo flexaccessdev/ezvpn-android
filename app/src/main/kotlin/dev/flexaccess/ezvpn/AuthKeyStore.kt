@@ -52,16 +52,17 @@ class AuthKeyStore(private val secrets: SecretStore) {
             } else {
                 val stored = (0 until parsed.length()).mapNotNull { parsed.optJSONObject(it) }
                 // A record whose secret no longer derives a public key is corrupt —
-                // drop it rather than carry an entry that can never connect.
-                val keys = stored.mapNotNull { obj ->
+                // drop it from the view rather than carry an entry that can never
+                // connect. Nothing is written back here: the derivation goes
+                // through the native library, and a transient failure there must
+                // not delete stored keys. The pruned list lands on disk with the
+                // next user-driven add/rename/delete.
+                _keys.value = stored.mapNotNull { obj ->
                     val secret = obj.optString("secret", "")
                     AuthKey.publicKey(secret)?.let {
                         Key(obj.optString("id"), obj.optString("name", "Unnamed"), secret, it)
                     }
                 }
-                _keys.value = keys
-                // Make the pruning stick so a corrupt record doesn't linger.
-                if (keys.size != stored.size) persist()
             }
         }
     }
@@ -73,6 +74,7 @@ class AuthKeyStore(private val secrets: SecretStore) {
      * secret must parse. The same keypair twice under two names is an
      * accidental re-add, not a use case. Returns the key, or an error message.
      */
+    @Synchronized
     fun add(rawName: String, rawSecret: String): Result<Key> {
         val name = when (val r = validated(rawName, excluding = null)) {
             is Validated.Ok -> r.name
@@ -95,10 +97,11 @@ class AuthKeyStore(private val secrets: SecretStore) {
     }
 
     /** Rename `id`; returns a user-facing error message, or null on success. */
+    @Synchronized
     fun rename(id: String, newName: String): String? {
         val previous = _keys.value
         val index = previous.indexOfFirst { it.id == id }
-        if (index < 0) return null
+        if (index < 0) return "That key is no longer in the list."
         val name = when (val r = validated(newName, excluding = id)) {
             is Validated.Ok -> r.name
             is Validated.Err -> return r.message
@@ -116,6 +119,7 @@ class AuthKeyStore(private val secrets: SecretStore) {
      * back. Profiles already saved with this key keep working: their own copy
      * of the secret is what connects.
      */
+    @Synchronized
     fun delete(id: String): String? {
         val previous = _keys.value
         if (previous.none { it.id == id }) return null

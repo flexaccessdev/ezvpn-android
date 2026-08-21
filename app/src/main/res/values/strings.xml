@@ -1,4 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">ezvpn</string>
+
+    <!-- Tunnel list -->
+    <string name="tunnel_list_auth_keys">Auth keys</string>
+    <string name="tunnel_list_add_profile">Add profile</string>
+    <string name="tunnel_list_version">ezvpn %1$s</string>
+    <string name="tunnel_list_empty_title">No profiles</string>
+    <string name="tunnel_list_empty_hint">Tap + to add a VPN profile.</string>
+    <string name="tunnel_list_waiting">Waiting…</string>
 </resources>

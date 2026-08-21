@@ -36,8 +36,15 @@ ADB=(adb)
 if [ -n "${ADB_SERIAL:-}" ]; then
   ADB=(adb -s "$ADB_SERIAL")
 fi
+adb devices
 if ! "${ADB[@]}" get-state >/dev/null 2>&1; then
   echo "no device: check 'adb devices' (or set ADB_SERIAL)" >&2
+  exit 1
+fi
+# A VPN needs the real network stack: this script targets physical devices only.
+if [ "$("${ADB[@]}" shell getprop ro.kernel.qemu | tr -d '\r')" = "1" ] ||
+   [ "$("${ADB[@]}" shell getprop ro.boot.qemu | tr -d '\r')" = "1" ]; then
+  echo "the selected target is an emulator; connect a physical device (or set ADB_SERIAL to one)" >&2
   exit 1
 fi
 

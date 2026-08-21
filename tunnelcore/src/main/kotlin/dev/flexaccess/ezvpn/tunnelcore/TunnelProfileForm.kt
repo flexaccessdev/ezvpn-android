@@ -35,13 +35,15 @@ data class TunnelProfileForm(
         val dnsMatchDomainList = splitCsv(dnsMatchDomains)
         SplitDns.validationError(dnsServerList, dnsMatchDomainList)?.let { throw TunnelProfileFormException.InvalidDns(it) }
 
-        val routeList = splitCsv(routes)
-        routeList.firstOrNull { IpPrefix.parse(it)?.isIpv4 != true }?.let {
-            throw TunnelProfileFormException.InvalidRoute("Not an IPv4 CIDR: $it")
+        // Routes are stored in the parser's canonical form (host bits zeroed,
+        // IPv6 compressed), not as typed.
+        val routeList = splitCsv(routes).map { text ->
+            IpPrefix.parse(text)?.takeIf { it.isIpv4 }?.toString()
+                ?: throw TunnelProfileFormException.InvalidRoute("Not an IPv4 CIDR: $text")
         }
-        val route6List = splitCsv(routes6)
-        route6List.firstOrNull { IpPrefix.parse(it)?.isIpv4 != false }?.let {
-            throw TunnelProfileFormException.InvalidRoute("Not an IPv6 CIDR: $it")
+        val route6List = splitCsv(routes6).map { text ->
+            IpPrefix.parse(text)?.takeIf { !it.isIpv4 }?.toString()
+                ?: throw TunnelProfileFormException.InvalidRoute("Not an IPv6 CIDR: $text")
         }
 
         val relayUrlList = splitCsv(relayUrls)

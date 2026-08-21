@@ -39,10 +39,8 @@ class IpPrefixTest {
         assertEquals("fd00::1", IpPrefix.host("fd00:0:0:0:0:0:0:1")!!.address)
         assertEquals("2001:db8::1:0:0:1", IpPrefix.host("2001:db8:0:0:1:0:0:1")!!.address)
         assertEquals("::", IpPrefix.host("::")!!.address)
-        assertEquals("1:0:0:2:0:0:0:3", IpPrefix.host("1:0:0:2:0:0:0:3")!!.address.let {
-            // longest zero run (3) wins over the first (2)
-            assertEquals("1:0:0:2::3", it); "1:0:0:2:0:0:0:3"
-        })
+        // longest zero run (3) wins over the first (2)
+        assertEquals("1:0:0:2::3", IpPrefix.host("1:0:0:2:0:0:0:3")!!.address)
     }
 
     @Test

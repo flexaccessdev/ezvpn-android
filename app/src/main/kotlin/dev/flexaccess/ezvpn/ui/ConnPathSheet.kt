@@ -31,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import dev.flexaccess.ezvpn.tunnelcore.TunnelConnectionPath
 import dev.flexaccess.ezvpn.tunnelcore.TunnelConnectionSnapshot
 import dev.flexaccess.ezvpn.tunnelcore.TunnelCustomRelay
+import kotlinx.coroutines.CancellationException
 
 /**
  * On-demand "connection path" readout: a point-in-time snapshot of how the
@@ -41,8 +42,21 @@ import dev.flexaccess.ezvpn.tunnelcore.TunnelCustomRelay
 @Composable
 fun ConnPathSheet(query: suspend () -> TunnelConnectionSnapshot, onDismiss: () -> Unit) {
     var snapshot by remember { mutableStateOf(TunnelConnectionSnapshot()) }
+    var loading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
     var refreshToken by remember { mutableIntStateOf(0) }
-    LaunchedEffect(refreshToken) { snapshot = query() }
+    LaunchedEffect(refreshToken) {
+        try {
+            snapshot = query()
+            error = null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            error = "Couldn't query the connection path: ${e.message ?: e.javaClass.simpleName}"
+        } finally {
+            loading = false
+        }
+    }
 
     ModalBottomSheet(onDismissRequest = onDismiss) {
         Column(
@@ -57,7 +71,12 @@ fun ConnPathSheet(query: suspend () -> TunnelConnectionSnapshot, onDismiss: () -
                 Spacer(Modifier.weight(1f))
                 IconButton(onClick = { refreshToken++ }) { Icon(Icons.Default.Refresh, contentDescription = "Refresh") }
             }
-            if (snapshot.paths.isEmpty()) {
+            val queryError = error
+            if (loading) {
+                Footnote("Querying…")
+            } else if (queryError != null) {
+                Footnote(queryError, color = MaterialTheme.colorScheme.error)
+            } else if (snapshot.paths.isEmpty()) {
                 Footnote("No path yet — still establishing. Close this and try again in a moment.")
             } else {
                 snapshot.paths.forEach { ConnPathRow(it) }

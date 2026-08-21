@@ -68,7 +68,7 @@ class TunnelsManager(context: Context) {
     fun remove(id: UUID) {
         val s = _state.value
         if (s.profileId == id && s.status.isInOperation) disconnect()
-        if (s.pendingProfileId == id) _state.update { it.copy(pendingProfileId = null) }
+        _state.update { if (it.pendingProfileId == id) it.copy(pendingProfileId = null) else it }
         try {
             profileStore.delete(id)
         } catch (e: ProfileStoreException) {
@@ -146,8 +146,10 @@ class TunnelsManager(context: Context) {
     private fun stopCurrent() {
         val service = EzvpnVpnService.instance
         if (service == null) {
-            // Nothing running: make sure the UI agrees.
-            _state.update { if (it.status.isInOperation) it.copy(status = TunnelStatus.DISCONNECTED) else it }
+            // Nothing running: make sure the UI agrees, and let a connect queued
+            // behind the (non-existent) session start.
+            val s = _state.value
+            if (s.status.isInOperation || s.pendingProfileId != null) onDisconnected(null, null)
             return
         }
         service.disconnect()

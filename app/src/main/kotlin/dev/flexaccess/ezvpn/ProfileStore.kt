@@ -24,6 +24,13 @@ class ProfileStore(context: Context, private val secrets: SecretStore) {
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    /**
+     * Why the stored list couldn't be decoded, or null once it was (an absent
+     * entry is an empty list). While set, every write is refused — persisting
+     * would replace the real list with this empty view (see [AuthKeyStore]).
+     */
+    private var loadError: String? = null
+
     private val _profiles = MutableStateFlow(load())
     val profiles: StateFlow<List<TunnelProfile>> = _profiles.asStateFlow()
 
@@ -37,6 +44,7 @@ class ProfileStore(context: Context, private val secrets: SecretStore) {
      */
     @Synchronized
     fun save(profile: TunnelProfile, authKey: String, relayAuthToken: String?) {
+        loadError?.let { throw ProfileStoreException(it) }
         val previousKey = runCatching { secrets.get(authKeyName(profile.id)) }.getOrNull()
         val previousToken = runCatching { secrets.get(relayTokenName(profile.id)) }.getOrNull()
         try {
@@ -62,6 +70,7 @@ class ProfileStore(context: Context, private val secrets: SecretStore) {
 
     @Synchronized
     fun delete(id: UUID) {
+        loadError?.let { throw ProfileStoreException(it) }
         val next = _profiles.value.filter { it.id != id }
         if (!prefs.edit().putString(KEY_PROFILES, TunnelProfile.listToJson(next)).commit()) {
             throw ProfileStoreException("Couldn't write the profile list.")
@@ -86,13 +95,16 @@ class ProfileStore(context: Context, private val secrets: SecretStore) {
         set(value) {
             prefs.edit().apply {
                 if (value == null) remove(KEY_LAST_PROFILE) else putString(KEY_LAST_PROFILE, value.toString())
-            }.apply()
+            }.commit()
         }
 
     private fun load(): List<TunnelProfile> {
         val json = prefs.getString(KEY_PROFILES, null) ?: return emptyList()
-        return runCatching { TunnelProfile.listFromJson(json) }.getOrElse { emptyList() }
-            .sortedWith(compareBy(TunnelNames.comparator) { it.name })
+        val parsed = runCatching { TunnelProfile.listFromJson(json) }.getOrElse {
+            loadError = "The stored profile list couldn't be decoded. Profiles can't be changed until it can be read."
+            return emptyList()
+        }
+        return parsed.sortedWith(compareBy(TunnelNames.comparator) { it.name })
     }
 
     private fun restore(id: UUID, key: String?, token: String?) {

@@ -2,6 +2,7 @@ package dev.flexaccess.ezvpn.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.Saver
@@ -67,8 +68,9 @@ fun EzvpnRoot(manager: TunnelsManager, onConnect: (UUID) -> Unit) {
         is Screen.Detail -> {
             val profile = profiles.firstOrNull { it.id == screen.id }
             if (profile == null) {
-                // Deleted underneath us (or a stale restored route).
-                pop()
+                // Deleted underneath us (or a stale restored route): leave, but
+                // as an effect — navigation state is not mutated mid-composition.
+                LaunchedEffect(screen) { pop() }
             } else {
                 TunnelDetailScreen(
                     profile = profile,

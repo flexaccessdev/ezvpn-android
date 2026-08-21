@@ -22,17 +22,23 @@ trap 'rm -f "$tmp"' EXIT
 
 echo "Downloading $url"
 curl -fsSL -o "$tmp" "$url"
-sha="$(sha256sum "$tmp" | cut -d' ' -f1)"
+if command -v sha256sum >/dev/null 2>&1; then
+  sha="$(sha256sum "$tmp" | cut -d' ' -f1)"
+else
+  sha="$(shasum -a 256 "$tmp" | cut -d' ' -f1)"   # macOS
+fi
 version="${tag#v}"
 code="$(sed -n 's/^ezvpn.versionCode=\([0-9]*\)$/\1/p' gradle.properties)"
 code=$((${code:-0} + 1))
 
-sed -i \
+# -i.bak works on both GNU and BSD sed (bare -i does not).
+sed -i.bak \
   -e "s|^ezvpn.releaseTag=.*|ezvpn.releaseTag=$tag|" \
   -e "s|^ezvpn.releaseSha256=.*|ezvpn.releaseSha256=$sha|" \
   -e "s|^ezvpn.versionName=.*|ezvpn.versionName=$version|" \
   -e "s|^ezvpn.versionCode=.*|ezvpn.versionCode=$code|" \
   gradle.properties
+rm -f gradle.properties.bak
 
 echo "Pinned $tag (sha256 $sha), versionName $version, versionCode $code"
 grep '^ezvpn\.' gradle.properties

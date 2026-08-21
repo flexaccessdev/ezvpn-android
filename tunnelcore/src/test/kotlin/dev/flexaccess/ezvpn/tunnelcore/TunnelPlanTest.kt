@@ -66,6 +66,24 @@ class TunnelPlanTest {
     }
 
     @Test
+    fun rejectsMalformedFields() {
+        val v6 = """"assigned_ip6":"fd7a::2","gateway6":"fd7a::1","mtu":1280,"excluded_routes":[],"excluded_routes6":[]"""
+        // A non-numeric mtu is a malformed reply, not a crash.
+        assertNull(NetworkConfig.parse("""{"mtu":"big","excluded_routes":[],"excluded_routes6":[]}"""))
+        // prefix_len6 must be a number within 0..128; it is never coerced to 0
+        // (which would turn the assigned /128 into a ::/0 route).
+        assertNull(NetworkConfig.parse("""{"prefix_len6":"wide",$v6}"""))
+        assertNull(NetworkConfig.parse("""{"prefix_len6":129,$v6}"""))
+        assertNull(NetworkConfig.parse("""{"prefix_len6":-1,$v6}"""))
+        val ok = NetworkConfig.parse("""{"prefix_len6":64,$v6}""")!!
+        assertEquals(64, ok.prefixLen6)
+        val plan = TunnelPlan.from(ok, profile)
+        assertEquals("fd7a::2/128", plan.address6.toString())
+        assertTrue(plan.routes6.contains(IpPrefix.parse("fd7a::/64")))
+        assertTrue(plan.routes6.none { it.prefixLength == 0 })
+    }
+
+    @Test
     fun planRoutesGatewayAndCarvesOutBypass() {
         val plan = TunnelPlan.from(NetworkConfig.parse(dualStack)!!, profile)
         assertEquals("10.124.0.2/32", plan.address4.toString())

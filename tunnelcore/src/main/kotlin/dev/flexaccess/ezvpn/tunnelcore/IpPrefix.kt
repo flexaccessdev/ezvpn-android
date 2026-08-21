@@ -1,6 +1,5 @@
 package dev.flexaccess.ezvpn.tunnelcore
 
-import java.net.Inet4Address
 import java.net.InetAddress
 
 /**
@@ -17,8 +16,12 @@ object IpLiteral {
     fun parse(s: String): ByteArray? {
         val text = s.trim()
         return when {
-            dottedQuad.matches(text) ->
-                runCatching { (InetAddress.getByName(text) as? Inet4Address)?.address }.getOrNull()
+            // Built directly: an out-of-range octet ("256.1.1.1") must fail
+            // here, not fall through to a hostname lookup in getByName.
+            dottedQuad.matches(text) -> {
+                val octets = text.split('.').map { it.toInt() }
+                if (octets.all { it in 0..255 }) ByteArray(4) { octets[it].toByte() } else null
+            }
             // An IPv4-mapped literal ("::ffff:1.2.3.4") comes back as an
             // Inet4Address on the JVM: accept whatever family Java decides.
             text.contains(':') && v6Shape.matches(text) ->

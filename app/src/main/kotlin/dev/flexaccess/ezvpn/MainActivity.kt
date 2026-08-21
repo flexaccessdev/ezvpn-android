@@ -10,7 +10,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import dev.flexaccess.ezvpn.ui.EzvpnRoot
 import dev.flexaccess.ezvpn.ui.EzvpnTheme
@@ -40,9 +40,11 @@ private fun ConsentGate(
     manager: TunnelsManager,
     content: @Composable (connect: (UUID) -> Unit) -> Unit,
 ) {
-    var pending by remember { mutableStateOf<UUID?>(null) }
+    // Saved state, not plain remember: the consent dialog is another activity,
+    // and this one may be recreated (rotation, memory) before it comes back.
+    var pending by rememberSaveable { mutableStateOf<String?>(null) }
     val launcher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val id = pending
+        val id = pending?.let { runCatching { UUID.fromString(it) }.getOrNull() }
         pending = null
         if (result.resultCode == Activity.RESULT_OK && id != null) manager.connect(id)
     }
@@ -51,7 +53,7 @@ private fun ConsentGate(
         if (intent == null) {
             manager.connect(id)
         } else {
-            pending = id
+            pending = id.toString()
             launcher.launch(intent)
         }
     }

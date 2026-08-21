@@ -76,23 +76,28 @@ data class NetworkConfig(
     val excludedRoutes6: List<String>,
 ) {
     companion object {
-        /** Parse the reply; null when it is not the expected document (no mtu). */
-        fun parse(json: String): NetworkConfig? {
-            val obj = runCatching { JSONObject(json) }.getOrNull() ?: return null
+        /**
+         * Parse the reply; null when it is not the expected document (no mtu,
+         * a non-numeric mtu or prefix_len6, or a prefix_len6 outside 0..128).
+         */
+        fun parse(json: String): NetworkConfig? = runCatching {
+            val obj = JSONObject(json)
             if (!obj.has("mtu") || obj.isNull("mtu")) return null
             fun str(key: String) = if (obj.isNull(key)) null else obj.optString(key, null)
-            return NetworkConfig(
+            val prefixLen6 = if (obj.isNull("prefix_len6")) null else obj.getInt("prefix_len6")
+            if (prefixLen6 != null && prefixLen6 !in 0..128) return null
+            NetworkConfig(
                 assignedIp = str("assigned_ip"),
                 netmask = str("netmask"),
                 gateway = str("gateway"),
                 assignedIp6 = str("assigned_ip6"),
-                prefixLen6 = if (obj.isNull("prefix_len6")) null else obj.optInt("prefix_len6"),
+                prefixLen6 = prefixLen6,
                 gateway6 = str("gateway6"),
                 mtu = obj.getInt("mtu"),
                 excludedRoutes = obj.optJSONArray("excluded_routes").toStringList(),
                 excludedRoutes6 = obj.optJSONArray("excluded_routes6").toStringList(),
             )
-        }
+        }.getOrNull()
     }
 }
 

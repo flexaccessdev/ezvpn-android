@@ -84,7 +84,7 @@ val ScreenPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
  */
 object Clipboard {
     fun copy(context: Context, label: String, value: String, isSecret: Boolean = false) {
-        val cm = context.getSystemService(ClipboardManager::class.java)
+        val cm = context.getSystemService(ClipboardManager::class.java) ?: return
         val clip = ClipData.newPlainText(label, value)
         if (isSecret) {
             clip.description.extras = PersistableBundle().apply {

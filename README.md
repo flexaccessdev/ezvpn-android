@@ -38,6 +38,7 @@ the core repo (tag + sha256 in `gradle.properties`) and unpacks the
 
 ```bash
 ./gradlew :tunnelcore:test          # pure-Kotlin unit tests
+./gradlew :app:testDebugUnitTest    # app-module JVM unit tests
 ./gradlew :app:assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
 ./gradlew :app:installDebug         # install on the connected device
 ```

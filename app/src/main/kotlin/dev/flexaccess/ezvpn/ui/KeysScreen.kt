@@ -29,6 +29,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -39,6 +40,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.flexaccess.ezvpn.AuthKey
 import dev.flexaccess.ezvpn.AuthKeyStore
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /**
  * The auth-key manager: the app's shared, named ed25519 keys, with generate,
@@ -53,6 +57,17 @@ fun KeysScreen(keys: List<AuthKeyStore.Key>, store: AuthKeyStore, onBack: () -> 
     var addMenu by remember { mutableStateOf(false) }
     var dialog by remember { mutableStateOf<KeyDialog?>(null) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+
+    // Key generation (native RNG) and every store write (keystore-encrypted
+    // secret store) are blocking work: run them off the main thread and bring
+    // only the outcome back to the UI.
+    fun runInBackground(op: () -> String?) {
+        scope.launch {
+            val message = withContext(Dispatchers.IO) { op() }
+            if (message != null) errorMessage = message
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -113,12 +128,14 @@ fun KeysScreen(keys: List<AuthKeyStore.Key>, store: AuthKeyStore, onBack: () -> 
             onDismiss = { dialog = null },
         ) { name ->
             dialog = null
-            val pair = AuthKey.generate()
-            if (pair == null) errorMessage = "Key generation failed." else store.add(name, pair.secretKey).onFailure { errorMessage = it.message }
+            runInBackground {
+                val pair = AuthKey.generate() ?: return@runInBackground "Key generation failed."
+                store.add(name, pair.secretKey).exceptionOrNull()?.message
+            }
         }
         KeyDialog.Import -> ImportDialog(onDismiss = { dialog = null }) { name, secret ->
             dialog = null
-            store.add(name, secret).onFailure { errorMessage = it.message }
+            runInBackground { store.add(name, secret).exceptionOrNull()?.message }
         }
         is KeyDialog.Rename -> NameDialog(
             title = "Rename key",
@@ -128,7 +145,7 @@ fun KeysScreen(keys: List<AuthKeyStore.Key>, store: AuthKeyStore, onBack: () -> 
             onDismiss = { dialog = null },
         ) { name ->
             dialog = null
-            store.rename(d.key.id, name)?.let { errorMessage = it }
+            runInBackground { store.rename(d.key.id, name) }
         }
         is KeyDialog.Export -> AlertDialog(
             onDismissRequest = { dialog = null },
@@ -149,7 +166,7 @@ fun KeysScreen(keys: List<AuthKeyStore.Key>, store: AuthKeyStore, onBack: () -> 
             confirmButton = {
                 TextButton(onClick = {
                     dialog = null
-                    store.delete(d.key.id)?.let { errorMessage = it }
+                    runInBackground { store.delete(d.key.id) }
                 }) { Text("Delete", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { dialog = null }) { Text("Cancel") } },
@@ -216,7 +233,8 @@ private fun NameDialog(
     onDismiss: () -> Unit,
     onConfirm: (String) -> Unit,
 ) {
-    var name by remember { mutableStateOf(initial) }
+    // Keyed on `initial`: the same dialog slot may be reused for another key.
+    var name by remember(initial) { mutableStateOf(initial) }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },

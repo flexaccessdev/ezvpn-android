@@ -65,6 +65,7 @@ class EzvpnVpnService : VpnService() {
     private lateinit var manager: TunnelsManager
     private lateinit var worker: ExecutorService
     private var current: Session? = null
+    private val connectivity: ConnectivityManager? by lazy { getSystemService(ConnectivityManager::class.java) }
 
     override fun onCreate() {
         super.onCreate()
@@ -152,7 +153,11 @@ class EzvpnVpnService : VpnService() {
         // network the device is on: routing the local subnet into the tunnel
         // would cut off on-link hosts, including the gateway carrying the
         // tunnel's own underlay traffic.
-        val cm = getSystemService(ConnectivityManager::class.java)
+        val cm = connectivity
+        if (cm == null) {
+            teardown(session, "The connectivity service is unavailable.")
+            return
+        }
         LocalNetworks.splitTunnelConflict(profile.routes, profile.routes6, AndroidLocalNetworks.current(cm))?.let {
             Log.e(TAG, it)
             teardown(session, it)
@@ -241,7 +246,11 @@ class EzvpnVpnService : VpnService() {
             return
         }
         Log.i(TAG, "tunnel running on fd ${tun.fd}")
-        val cm = getSystemService(ConnectivityManager::class.java)
+        val cm = connectivity
+        if (cm == null) {
+            teardown(session, "The connectivity service is unavailable.")
+            return
+        }
         session.monitor = NetworkMonitor(cm, worker) { reason ->
             val s = current ?: return@NetworkMonitor
             if (s !== session) return@NetworkMonitor

@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -43,6 +44,8 @@ import dev.flexaccess.ezvpn.TunnelsManagerException
 import dev.flexaccess.ezvpn.tunnelcore.TunnelProfile
 import dev.flexaccess.ezvpn.tunnelcore.TunnelProfileForm
 import dev.flexaccess.ezvpn.tunnelcore.TunnelProfileFormException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /** Add (`profile == null`) or edit a profile. Save validates and, on success, leaves. */
@@ -57,13 +60,20 @@ fun TunnelEditScreen(
 ) {
     val isAdd = profile == null
     var form by rememberSaveable(profile?.id, stateSaver = FormSaver) {
-        mutableStateOf(
-            if (profile == null) {
-                TunnelProfileForm()
-            } else {
-                TunnelProfileForm.from(profile, runCatching { manager.profileStore.relayAuthToken(profile.id) }.getOrNull() ?: "")
-            },
-        )
+        mutableStateOf(if (profile == null) TunnelProfileForm() else TunnelProfileForm.from(profile))
+    }
+    // The relay token is a secret: it stays out of the saved instance state
+    // (see FormSaver) and is read from the secret store off the main thread,
+    // once per profile (and again after recreation, since it wasn't saved).
+    // Only the token field is merged in, and only while the user hasn't typed
+    // one, so other in-progress edits are untouched.
+    if (profile != null) {
+        LaunchedEffect(profile.id) {
+            val token = withContext(Dispatchers.IO) {
+                runCatching { manager.profileStore.relayAuthToken(profile.id) }.getOrNull()
+            } ?: ""
+            if (token.isNotEmpty() && form.relayAuthToken.isEmpty()) form = form.copy(relayAuthToken = token)
+        }
     }
     var error by rememberSaveable { mutableStateOf<String?>(null) }
     val selectedKey = keys.firstOrNull { it.id == form.authKeyId }
@@ -213,8 +223,23 @@ private fun KeyPicker(keys: List<AuthKeyStore.Key>, selected: AuthKeyStore.Key?,
     }
 }
 
-/** Keeps the editor's text across rotation (the form is a plain data class). */
+/**
+ * Keeps the editor's text across rotation (the form is a plain data class) —
+ * except the relay token, a secret that must not sit in plaintext in the
+ * saved-state Bundle; the editor re-reads it from the secret store instead.
+ */
 private val FormSaver = androidx.compose.runtime.saveable.listSaver<TunnelProfileForm, String>(
-    save = { listOf(it.name, it.serverNodeId, it.authKeyId, it.relayUrls, it.relayAuthToken, it.routes, it.routes6, it.dnsServers, it.dnsMatchDomains) },
-    restore = { TunnelProfileForm(it[0], it[1], it[2], it[3], it[4], it[5], it[6], it[7], it[8]) },
+    save = { listOf(it.name, it.serverNodeId, it.authKeyId, it.relayUrls, it.routes, it.routes6, it.dnsServers, it.dnsMatchDomains) },
+    restore = {
+        TunnelProfileForm(
+            name = it[0],
+            serverNodeId = it[1],
+            authKeyId = it[2],
+            relayUrls = it[3],
+            routes = it[4],
+            routes6 = it[5],
+            dnsServers = it[6],
+            dnsMatchDomains = it[7],
+        )
+    },
 )

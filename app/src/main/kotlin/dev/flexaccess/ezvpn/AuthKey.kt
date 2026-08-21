@@ -24,9 +24,13 @@ object AuthKey {
         return Keypair(secret, public)
     }
 
-    /** The public key of `secret`, or null when it isn't a valid secret key. */
+    /**
+     * The public key of `secret`, or null when it isn't a valid secret key (the
+     * native side returns null for an unparsable secret; a failure to reach it
+     * at all is treated the same way, as in [generate]).
+     */
     fun publicKey(secret: String): String? {
         if (secret.isEmpty()) return null
-        return EzvpnNative.clientPublicKey(secret)
+        return runCatching { EzvpnNative.clientPublicKey(secret) }.getOrNull()
     }
 }

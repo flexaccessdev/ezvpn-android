@@ -19,16 +19,14 @@ jobs:
       - name: tunnelcore unit tests
         run: ./gradlew :tunnelcore:test --console=plain
 
-      # The APK needs a jniLibs tree. Until a release with the pinned sha256
-      # exists, point the build at an empty local tree (the .so is loaded at
-      # runtime only, so the build and the JVM tests do not need it).
-      - name: Stage jniLibs
+      # The APK must carry the pinned release's libezvpn.so: refuse to build one
+      # without a valid pin rather than publish an artifact with no native
+      # library in it (pin with scripts/bump-jnilibs.sh <tag>).
+      - name: Check the ezvpn release pin
         run: |
-          if grep -qE '^ezvpn.releaseSha256=[0-9a-f]{64}$' gradle.properties; then
-            echo "EZVPN_LOCAL_JNILIBS=" >> "$GITHUB_ENV"
-          else
-            mkdir -p ../ezvpn/dist/android/jniLibs
-            echo "EZVPN_LOCAL_JNILIBS=1" >> "$GITHUB_ENV"
+          if ! grep -qE '^ezvpn.releaseSha256=[0-9a-f]{64}$' gradle.properties; then
+            echo "::error::gradle.properties has no valid ezvpn.releaseSha256; pin a published ezvpn release with scripts/bump-jnilibs.sh <tag>"
+            exit 1
           fi
 
       - name: App unit tests + debug APK

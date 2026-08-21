@@ -27,9 +27,11 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.flexaccess.ezvpn.BuildConfig
+import dev.flexaccess.ezvpn.R
 import dev.flexaccess.ezvpn.TunnelState
 import dev.flexaccess.ezvpn.TunnelStatus
 import dev.flexaccess.ezvpn.tunnelcore.TunnelProfile
@@ -50,18 +52,18 @@ fun TunnelListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("ezvpn") },
+                title = { Text(stringResource(R.string.app_name)) },
                 actions = {
                     // The auth keys are shared across profiles, so they are
                     // managed from the root screen (and the editor's picker).
-                    IconButton(onClick = onKeys) { Icon(Icons.Default.VpnKey, contentDescription = "Auth keys") }
-                    IconButton(onClick = onAdd) { Icon(Icons.Default.Add, contentDescription = "Add profile") }
+                    IconButton(onClick = onKeys) { Icon(Icons.Default.VpnKey, contentDescription = stringResource(R.string.tunnel_list_auth_keys)) }
+                    IconButton(onClick = onAdd) { Icon(Icons.Default.Add, contentDescription = stringResource(R.string.tunnel_list_add_profile)) }
                 },
             )
         },
         bottomBar = {
             Text(
-                "ezvpn ${BuildConfig.VERSION_NAME}",
+                stringResource(R.string.tunnel_list_version, BuildConfig.VERSION_NAME),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
@@ -72,8 +74,8 @@ fun TunnelListScreen(
         if (profiles.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("No profiles", style = MaterialTheme.typography.titleMedium)
-                    Text("Tap + to add a VPN profile.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(stringResource(R.string.tunnel_list_empty_title), style = MaterialTheme.typography.titleMedium)
+                    Text(stringResource(R.string.tunnel_list_empty_hint), color = MaterialTheme.colorScheme.onSurfaceVariant)
                 }
             }
         } else {
@@ -110,7 +112,7 @@ private fun TunnelRow(
         Column(Modifier.weight(1f)) {
             Text(profile.name, style = MaterialTheme.typography.bodyLarge)
             Text(
-                if (waiting) "Waiting…" else status.displayText,
+                if (waiting) stringResource(R.string.tunnel_list_waiting) else status.displayText,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

@@ -52,7 +52,11 @@ val fetchEzvpnJniLibs by tasks.registering {
         dir.deleteRecursively()
         dir.mkdirs()
         logger.lifecycle("Downloading $url")
-        val bytes = URI(url).toURL().openStream().use { it.readBytes() }
+        val bytes = URI(url).toURL().openConnection().run {
+            connectTimeout = 30_000
+            readTimeout = 120_000
+            getInputStream().use { it.readBytes() }
+        }
         val actual = MessageDigest.getInstance("SHA-256").digest(bytes)
             .joinToString("") { "%02x".format(it) }
         require(actual == sha256) {
