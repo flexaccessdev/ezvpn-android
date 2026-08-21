@@ -1,0 +1,17 @@
+# Gradle
+.gradle/
+build/
+local.properties
+.kotlin/
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+
+# Signing
+*.jks
+*.keystore
+
+tmp/
+CLAUDE.local.md
