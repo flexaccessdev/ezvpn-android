@@ -16,7 +16,7 @@ Design and the JNI contract are documented in the core repo:
 | Module | What |
 |---|---|
 | `app` | The Compose app (`MainActivity`, screens under `ui/`), `EzvpnVpnService`, `TunnelsManager`, the encrypted secret/profile stores, and `EzvpnNative` (the JNI binding — its package and name are fixed by the symbols in `libezvpn.so`). |
-| `tunnelcore` | Pure Kotlin, no Android dependency: IP/CIDR math (`IpPrefix`, `RouteMath.subtract` for the no-`excludeRoute` bypass), the profile model + editor validation, the `VpnService.Builder` plan (`TunnelPlan`), split-DNS rules (`SplitDns`, `DnsProxy`), and the core's JSON shapes. Unit-tested on the JVM. |
+| `tunnelcore` | Pure Kotlin, no Android dependency: IP/CIDR math (`IpPrefix`, `RouteMath.subtract` for the bypass on Android < 13, which has no `excludeRoute`), the profile model + editor validation, the `VpnService.Builder` plan (`TunnelPlan`), split-DNS rules (`SplitDns`, `DnsProxy`), and the core's JSON shapes. Unit-tested on the JVM. |
 
 ## Requirements
 

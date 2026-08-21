@@ -95,8 +95,9 @@ class IpPrefix private constructor(
     /**
      * This prefix minus `excluded`: the (up to `maxPrefixLength - prefixLength`)
      * prefixes that cover everything here except `excluded`. Android's
-     * `VpnService.Builder` had no excludeRoute before API 33, so the bypass set
-     * the core computes is carved out of the routed prefixes this way instead.
+     * `VpnService.Builder` has no excludeRoute before API 33, so there the
+     * bypass set the core computes is carved out of the routed prefixes this
+     * way instead (see [TunnelPlan]).
      */
     fun subtract(excluded: IpPrefix): List<IpPrefix> {
         if (!overlaps(excluded)) return listOf(this)

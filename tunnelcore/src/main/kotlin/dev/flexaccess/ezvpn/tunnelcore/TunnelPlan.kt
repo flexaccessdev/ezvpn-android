@@ -103,20 +103,25 @@ data class NetworkConfig(
 
 /**
  * What the service will program into `VpnService.Builder`, per family. Routes
- * are the *effective* set: interface routes + the profile's split-tunnel
- * prefixes, minus the core's bypass set (Android has no excludeRoute before
- * API 33, and one code path is easier to trust than two).
+ * are the interface routes + the profile's split-tunnel prefixes; the core's
+ * bypass set (server/relay underlay addresses those prefixes would capture) is
+ * kept out of the tunnel in one of two ways, chosen by [bypassExcluded]:
+ * `Builder.excludeRoute` where the platform has it (API 33+), else by
+ * subtracting the bypass hosts from the routes (a /128 carved out of a /56 is
+ * 72 prefixes, which is why the newer API is preferred when available).
  */
 data class TunnelPlan(
     val mtu: Int,
     val address4: IpPrefix?,
     val address6: IpPrefix?,
-    /** Routes actually installed (after subtraction), sorted. */
+    /** Routes to `addRoute`, sorted: the full set when [bypassExcluded], else the remainder after subtraction. */
     val routes4: List<IpPrefix>,
     val routes6: List<IpPrefix>,
-    /** The bypass set that was carved out (for the debug readout). */
+    /** The bypass set: what to `excludeRoute` when [bypassExcluded], otherwise what was carved out (readout only). */
     val bypass4: List<IpPrefix>,
     val bypass6: List<IpPrefix>,
+    /** True when the bypass set is to be installed with `excludeRoute` rather than subtracted from the routes. */
+    val bypassExcluded: Boolean,
     /** What `addDnsServer` gets: the proxy addresses under split DNS, else the profile's servers. */
     val dnsServers: List<String>,
     val dnsMatchDomains: List<String>,
@@ -148,14 +153,21 @@ data class TunnelPlan(
 
     companion object {
         /**
-         * Derive the plan from the handshake result and the profile. Routes for
-         * a family the server did not assign can't be applied and are reported
-         * as warnings; DNS servers no route covers are a warning too (usually a
-         * misconfiguration for a private resolver, but legitimate for a public
-         * one, so warn instead of refusing).
+         * Derive the plan from the handshake result and the profile.
+         * `excludeRoutes` says whether the platform offers
+         * `Builder.excludeRoute` (API 33+); without it the bypass set is
+         * subtracted from the routes. Routes for a family the server did not
+         * assign can't be applied and are reported as warnings; DNS servers no
+         * route covers are a warning too (usually a misconfiguration for a
+         * private resolver, but legitimate for a public one, so warn instead
+         * of refusing).
          */
-        fun from(net: NetworkConfig, profile: TunnelProfile): TunnelPlan {
+        fun from(net: NetworkConfig, profile: TunnelProfile, excludeRoutes: Boolean = false): TunnelPlan {
             val warnings = ArrayList<String>()
+            // What the tunnel effectively covers either way; only the install
+            // shape differs.
+            fun install(included: List<IpPrefix>, bypass: List<IpPrefix>): List<IpPrefix> =
+                if (excludeRoutes) included.toSortedSet().toList() else RouteMath.subtract(included, bypass)
             val userRoutes4 = profile.routes.mapNotNull { IpPrefix.parse(it)?.takeIf { p -> p.isIpv4 } }
             val userRoutes6 = profile.routes6.mapNotNull { IpPrefix.parse(it)?.takeIf { p -> !p.isIpv4 } }
 
@@ -171,7 +183,7 @@ data class TunnelPlan(
                 val gateway = net.gateway?.let { IpPrefix.host(it) }
                 val included = RouteMath.interfaceRoutes(assigned4, gateway) + userRoutes4
                 bypass4 = net.excludedRoutes.mapNotNull { IpPrefix.parse(it) }.filter { it.isIpv4 }
-                routes4 = RouteMath.subtract(included, bypass4)
+                routes4 = install(included, bypass4)
             } else if (profile.routes.isNotEmpty()) {
                 warnings += "ignoring ${profile.routes.size} IPv4 route(s): server assigned no IPv4 address"
             }
@@ -187,12 +199,15 @@ data class TunnelPlan(
                 val gateway6 = net.gateway6?.let { IpPrefix.host(it) }
                 val included = RouteMath.interfaceRoutes(assigned6, gateway6) + userRoutes6
                 bypass6 = net.excludedRoutes6.mapNotNull { IpPrefix.parse(it) }.filter { !it.isIpv4 }
-                routes6 = RouteMath.subtract(included, bypass6)
+                routes6 = install(included, bypass6)
             } else if (profile.routes6.isNotEmpty()) {
                 warnings += "ignoring ${profile.routes6.size} IPv6 route(s): server assigned no IPv6 address"
             }
 
-            val outside = SplitDns.serversOutsideRoutes(profile.dnsServers, routes4 + routes6)
+            // Coverage is judged on what the tunnel really carries, so a resolver
+            // sitting on a bypassed address warns under both install shapes.
+            val effective = RouteMath.subtract(routes4, bypass4) + RouteMath.subtract(routes6, bypass6)
+            val outside = SplitDns.serversOutsideRoutes(profile.dnsServers, effective)
             if (outside.isNotEmpty()) {
                 warnings += "DNS server(s) ${outside.joinToString(", ")} not covered by any tunnel route"
             }
@@ -224,6 +239,7 @@ data class TunnelPlan(
                 routes6 = routes6,
                 bypass4 = bypass4,
                 bypass6 = bypass6,
+                bypassExcluded = excludeRoutes,
                 dnsServers = dnsServers,
                 dnsMatchDomains = profile.dnsMatchDomains,
                 dnsProxyAddresses = dnsProxyAddresses,
