@@ -6,6 +6,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.net.VpnService
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.os.ParcelFileDescriptor
@@ -22,6 +23,7 @@ import dev.flexaccess.ezvpn.tunnelcore.TunnelConfigJson
 import dev.flexaccess.ezvpn.tunnelcore.TunnelPlan
 import dev.flexaccess.ezvpn.tunnelcore.TunnelProfile
 import java.net.Inet6Address
+import java.net.InetAddress
 import java.util.UUID
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -211,7 +213,7 @@ class EzvpnVpnService : VpnService() {
             teardown(session, "Bad network config from the server: $result")
             return
         }
-        val plan = TunnelPlan.from(net, profile)
+        val plan = TunnelPlan.from(net, profile, excludeRoutes = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU)
         plan.warnings.forEach { Log.w(TAG, it) }
         if (plan.remoteAddress == null) {
             teardown(session, "The server assigned no address.")
@@ -222,6 +224,14 @@ class EzvpnVpnService : VpnService() {
         plan.address4?.let { builder.addAddress(it.address, 32) }
         plan.address6?.let { builder.addAddress(it.address, 128) }
         (plan.routes4 + plan.routes6).forEach { builder.addRoute(it.address, it.prefixLength) }
+        if (plan.bypassExcluded && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            // Underlay hosts stay reachable off-tunnel as throw routes inside the
+            // routed prefixes (longest match wins), instead of the tunnel routes
+            // being split around them.
+            (plan.bypass4 + plan.bypass6).forEach {
+                builder.excludeRoute(android.net.IpPrefix(InetAddress.getByAddress(it.bytes), it.prefixLength))
+            }
+        }
         plan.dnsServers.forEach { builder.addDnsServer(it) }
         // An address family with no address on the interface is blocked for
         // every app by default; we are a split tunnel, so let it bypass instead.

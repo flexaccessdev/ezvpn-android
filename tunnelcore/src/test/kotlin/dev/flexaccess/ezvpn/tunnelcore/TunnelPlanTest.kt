@@ -101,6 +101,32 @@ class TunnelPlanTest {
     }
 
     @Test
+    fun planExcludesBypassInsteadOfSubtractingWhenThePlatformCan() {
+        val net = NetworkConfig.parse(
+            """{"assigned_ip":"10.124.0.2","netmask":"255.255.255.255","gateway":"10.124.0.1",
+                "assigned_ip6":"fd7a::2","prefix_len6":128,"gateway6":"fd7a::1","mtu":1280,
+                "excluded_routes":["10.9.9.9/32"],"excluded_routes6":["fd00:1::5/128"]}""",
+        )!!
+        val plan = TunnelPlan.from(net, profile, excludeRoutes = true)
+        assertTrue(plan.bypassExcluded)
+        // Routes stay whole; the bypass hosts go to excludeRoute.
+        assertEquals(listOf(IpPrefix.parse("10.0.0.0/8"), IpPrefix.parse("10.124.0.1/32")), plan.routes4)
+        assertEquals(listOf(IpPrefix.parse("fd00::/8"), IpPrefix.parse("fd7a::1/128")), plan.routes6)
+        assertEquals(listOf(IpPrefix.parse("10.9.9.9/32")), plan.bypass4)
+        assertEquals(listOf(IpPrefix.parse("fd00:1::5/128")), plan.bypass6)
+        assertTrue(plan.warnings.isEmpty())
+        // Same input subtracted: the /128 splits fd00::/8 into 120 prefixes.
+        val subtracted = TunnelPlan.from(net, profile, excludeRoutes = false)
+        assertTrue(!subtracted.bypassExcluded)
+        assertEquals(121, subtracted.routes6.size)
+        assertTrue(subtracted.routes6.none { it.containsAddress(IpLiteral.parse("fd00:1::5")!!) })
+        // A resolver on a bypassed address is uncovered under both shapes.
+        val onBypass = profile.copy(dnsServers = listOf("10.9.9.9"))
+        assertTrue(TunnelPlan.from(net, onBypass, excludeRoutes = true).warnings.single().contains("10.9.9.9"))
+        assertTrue(TunnelPlan.from(net, onBypass, excludeRoutes = false).warnings.single().contains("10.9.9.9"))
+    }
+
+    @Test
     fun planWarnsAboutUnassignedFamilyAndUncoveredDns() {
         val net = NetworkConfig.parse(
             """{"assigned_ip":"10.124.0.2","netmask":"255.255.255.255","gateway":"10.124.0.1",
