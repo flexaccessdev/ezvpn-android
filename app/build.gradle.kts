@@ -94,9 +94,26 @@ android {
         versionName = providers.gradleProperty("ezvpn.versionName").get()
     }
 
+    // Release signing comes from the environment (scripts/build-release-apk.sh
+    // sets it up): EZVPN_KEYSTORE (path), EZVPN_KEYSTORE_PASSWORD, optional
+    // EZVPN_KEY_ALIAS (default "ezvpn") and EZVPN_KEY_PASSWORD (defaults to the
+    // keystore password). Without EZVPN_KEYSTORE, assembleRelease produces an
+    // unsigned APK (app-release-unsigned.apk) that no device will install.
+    val releaseKeystore = System.getenv("EZVPN_KEYSTORE")?.takeIf { it.isNotBlank() }
+    if (releaseKeystore != null) {
+        signingConfigs.create("release") {
+            storeFile = file(releaseKeystore)
+            storePassword = System.getenv("EZVPN_KEYSTORE_PASSWORD")?.takeIf { it.isNotEmpty() }
+                ?: error("EZVPN_KEYSTORE is set but EZVPN_KEYSTORE_PASSWORD is not")
+            keyAlias = System.getenv("EZVPN_KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "ezvpn"
+            keyPassword = System.getenv("EZVPN_KEY_PASSWORD")?.takeIf { it.isNotEmpty() } ?: storePassword
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.findByName("release")
         }
     }
 
