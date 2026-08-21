@@ -1,18 +1,17 @@
 #!/usr/bin/env bash
 #
-# Install the signed release APK on the physical device.
+# Install the signed release APK on a real device.
 #
-# This is the only thing the physical device (RELEASE_DEVICE_SERIAL below) is
-# used for; all development, debug installs, and testing happen on the emulator
-# via scripts/run-device.sh. The script refuses unsigned APKs and refuses to
-# target the emulator.
+# The target is RELEASE_DEVICE_SERIAL (required; no default device). All
+# development, debug installs, and testing happen on the emulator via
+# scripts/run-device.sh. The script refuses unsigned APKs and refuses to target
+# the emulator.
 #
-# Usage:
+# Usage (RELEASE_DEVICE_SERIAL=<serial> in front of each):
 #   scripts/install-release-apk.sh                 # dist/ezvpn-android-<versionName>.apk
 #   scripts/install-release-apk.sh path/to.apk     # a specific signed APK
 #   scripts/install-release-apk.sh --build         # run scripts/build-release-apk.sh first
 #   scripts/install-release-apk.sh --launch        # also start the app afterwards
-#   RELEASE_DEVICE_SERIAL=<serial> scripts/install-release-apk.sh   # another phone
 #
 # Note: a release-signed build cannot be installed over a debug build of the
 # same applicationId; uninstall the other one first (adb uninstall ...).
@@ -22,7 +21,8 @@ set -euo pipefail
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
 EMULATOR_SERIAL="${EMULATOR_SERIAL:-10.22.35.66:5555}"
-RELEASE_DEVICE_SERIAL="${RELEASE_DEVICE_SERIAL:-10.22.38.204:5555}"
+RELEASE_DEVICE_SERIAL="${RELEASE_DEVICE_SERIAL:-}"
+[ -n "$RELEASE_DEVICE_SERIAL" ] || { echo "RELEASE_DEVICE_SERIAL=<serial> is required (see 'adb devices')" >&2; exit 1; }
 
 BUILD=0
 LAUNCH=0
@@ -71,7 +71,7 @@ if echo "$certs" | grep -q 'CN=Android Debug'; then
   exit 1
 fi
 
-# The physical device is attached over adb-over-TCP; (re)connect if needed.
+# A device given as host:port is attached over adb-over-TCP; (re)connect if needed.
 case "$RELEASE_DEVICE_SERIAL" in
   *:*) adb connect "$RELEASE_DEVICE_SERIAL" >/dev/null 2>&1 || true ;;
 esac

@@ -22,11 +22,11 @@ Design and the JNI contract are documented in the core repo:
 
 - JDK 17, Android SDK with platform 37 and build-tools 37 (the Gradle wrapper
   brings Gradle itself; AGP 9 with built-in Kotlin).
-- An Android 10+ (`minSdk` 29) target. Development is done against the
+- An Android 10+ (`minSdk` 29) arm64 device (the app is arm64-v8a only, per
+  [Play's 64-bit requirement](https://developer.android.com/google/play/requirements/64-bit)). Development is done against the
   emulator (`10.22.35.66:5555`, an arm64 Android VM bridged onto the LAN like a
   phone; `adb connect 10.22.35.66`) — a `VpnService` cannot be exercised on the
-  JVM. The physical device (`10.22.38.204:5555`) is reserved for installing
-  the signed release APK and is never used for development.
+  JVM.
 - For FFI work: the sibling `../ezvpn` checkout, the Android NDK and
   `cargo-ndk` (see that repo's `build-android.sh`).
 
@@ -66,22 +66,18 @@ first use — back it up, devices only accept updates signed with the same key.
 A release build cannot be installed over a debug build of the app (different
 signature); uninstall the other one first.
 
-The signed APK is the only thing that goes on the physical device:
+Install the signed APK on a real device (the serial is required — there is
+no default device):
 
 ```bash
-scripts/install-release-apk.sh           # dist/ezvpn-android-<version>.apk → 10.22.38.204:5555
-scripts/install-release-apk.sh --build   # build it first
-scripts/install-release-apk.sh --launch  # and start the app
+RELEASE_DEVICE_SERIAL=<serial> scripts/install-release-apk.sh           # dist/ezvpn-android-<version>.apk
+RELEASE_DEVICE_SERIAL=<serial> scripts/install-release-apk.sh --build   # build it first
+RELEASE_DEVICE_SERIAL=<serial> scripts/install-release-apk.sh --launch  # and start the app
 ```
 
-The tablet listens on a fixed port because `persist.adb.tcp.port=5555` was
-set on it as root (Developer options → Rooted debugging, then `adb root` and
-`adb shell setprop persist.adb.tcp.port 5555`); Android's *Wireless debugging*
-mode would pick a new random port on every toggle or reboot.
-
 It verifies the signature with `apksigner` and refuses unsigned or
-debug-signed APKs, and refuses to target the emulator
-(`RELEASE_DEVICE_SERIAL` / `EMULATOR_SERIAL` override the serials).
+debug-signed APKs, and refuses to target the emulator (`EMULATOR_SERIAL`
+overrides that serial).
 
 ### Local FFI development
 
@@ -97,8 +93,7 @@ EZVPN_LOCAL_JNILIBS=1 ANDROID_SERIAL=10.22.35.66:5555 ./gradlew :app:installDebu
 `scripts/run-device.sh` does all of it on the emulator — builds the core for
 its ABI, installs the debug APK, launches the app, and tails `logcat` for the
 `ezvpn` tag (`--pinned` skips the local core and uses the release, `--no-core`
-skips rebuilding it, `ADB_SERIAL` picks another emulator). It refuses to target
-the physical device.
+skips rebuilding it, `ADB_SERIAL` picks another emulator).
 
 ### Watching the emulator screen
 
@@ -111,7 +106,7 @@ adb connect 10.22.35.66
 scrcpy -s 10.22.35.66:5555
 ```
 
-Always pass `-s`: with the physical device attached too, scrcpy would otherwise
+Always pass `-s`: with more than one device attached, scrcpy would otherwise
 refuse to pick one.
 
 ## Using the app

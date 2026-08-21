@@ -3,9 +3,7 @@
 # Build, install, launch, and watch the app on the development emulator.
 #
 # All development happens on the adb-connected emulator (EMULATOR_SERIAL below,
-# an arm64 Android VM reachable over TCP). The physical device is reserved for
-# installing the signed release APK (scripts/install-release-apk.sh) and this
-# script refuses to target it.
+# an arm64 Android VM reachable over TCP).
 #
 # By default the Rust core is rebuilt from the sibling ../ezvpn checkout for the
 # emulator's primary ABI (release profile) and the app links it via
@@ -37,16 +35,10 @@ for arg in "$@"; do
   esac
 done
 
-# The development emulator and the physical device the signed APK goes to.
+# The development emulator.
 EMULATOR_SERIAL="${EMULATOR_SERIAL:-10.22.35.66:5555}"
-RELEASE_DEVICE_SERIAL="${RELEASE_DEVICE_SERIAL:-10.22.38.204:5555}"
 
 ADB_SERIAL="${ADB_SERIAL:-$EMULATOR_SERIAL}"
-if [ "$ADB_SERIAL" = "$RELEASE_DEVICE_SERIAL" ]; then
-  echo "refusing to target the physical device $RELEASE_DEVICE_SERIAL: development runs on the emulator ($EMULATOR_SERIAL);" >&2
-  echo "the physical device only gets the signed release APK via scripts/install-release-apk.sh" >&2
-  exit 1
-fi
 # ANDROID_SERIAL makes Gradle's installDebug (and plain adb) use the same target
 # instead of failing/fanning out when several devices are attached.
 export ANDROID_SERIAL="$ADB_SERIAL"
