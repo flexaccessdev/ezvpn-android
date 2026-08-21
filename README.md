@@ -22,8 +22,11 @@ Design and the JNI contract are documented in the core repo:
 
 - JDK 17, Android SDK with platform 37 and build-tools 37 (the Gradle wrapper
   brings Gradle itself; AGP 9 with built-in Kotlin).
-- A device running Android 10+ (`minSdk` 29). Development is done against a
-  physical device over adb — a VPN needs the real network stack.
+- An Android 10+ (`minSdk` 29) target. Development is done against the
+  emulator (`10.22.35.66:5555`, an arm64 Android VM bridged onto the LAN like a
+  phone; `adb connect 10.22.35.66`) — a `VpnService` cannot be exercised on the
+  JVM. The physical device (`10.22.38.204:51035`) is reserved for installing
+  the signed release APK and is never used for development.
 - For FFI work: the sibling `../ezvpn` checkout, the Android NDK and
   `cargo-ndk` (see that repo's `build-android.sh`).
 
@@ -40,7 +43,7 @@ the core repo (tag + sha256 in `gradle.properties`) and unpacks the
 ./gradlew :tunnelcore:test          # pure-Kotlin unit tests
 ./gradlew :app:testDebugUnitTest    # app-module JVM unit tests
 ./gradlew :app:assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
-./gradlew :app:installDebug         # install on the connected device
+ANDROID_SERIAL=10.22.35.66:5555 ./gradlew :app:installDebug   # debug install on the emulator
 ```
 
 Pin a newer core release with `scripts/bump-jnilibs.sh <tag>` (rewrites the
@@ -63,6 +66,18 @@ first use — back it up, devices only accept updates signed with the same key.
 A release build cannot be installed over a debug build of the app (different
 signature); uninstall the other one first.
 
+The signed APK is the only thing that goes on the physical device:
+
+```bash
+scripts/install-release-apk.sh           # dist/ezvpn-android-<version>.apk → 10.22.38.204:51035
+scripts/install-release-apk.sh --build   # build it first
+scripts/install-release-apk.sh --launch  # and start the app
+```
+
+It verifies the signature with `apksigner` and refuses unsigned or
+debug-signed APKs, and refuses to target the emulator
+(`RELEASE_DEVICE_SERIAL` / `EMULATOR_SERIAL` override the serials).
+
 ### Local FFI development
 
 To run against a local build of the core instead of the pinned release, build
@@ -70,14 +85,29 @@ it in the sibling checkout and set `EZVPN_LOCAL_JNILIBS=1` (only the exact
 value `1` opts in; anything else uses the release):
 
 ```bash
-(cd ../ezvpn && ./build-android.sh release)        # or ABIS="arm64-v8a" ./build-android.sh debug
-EZVPN_LOCAL_JNILIBS=1 ./gradlew :app:installDebug
+(cd ../ezvpn && ABIS="arm64-v8a" ./build-android.sh release)   # the emulator is arm64
+EZVPN_LOCAL_JNILIBS=1 ANDROID_SERIAL=10.22.35.66:5555 ./gradlew :app:installDebug
 ```
 
-`scripts/run-device.sh` does all of it — builds the core for the connected
-device's ABI, installs, launches the app, and tails `logcat` for the `ezvpn`
-tag (`--pinned` skips the local core and uses the release, `--no-core` skips
-rebuilding it).
+`scripts/run-device.sh` does all of it on the emulator — builds the core for
+its ABI, installs the debug APK, launches the app, and tails `logcat` for the
+`ezvpn` tag (`--pinned` skips the local core and uses the release, `--no-core`
+skips rebuilding it, `ADB_SERIAL` picks another emulator). It refuses to target
+the physical device.
+
+### Watching the emulator screen
+
+[scrcpy](https://github.com/Genymobile/scrcpy) mirrors and controls the
+emulator (tap, type, paste) from the desktop; it is a LAN device like a phone,
+so it is reached by serial:
+
+```bash
+adb connect 10.22.35.66
+scrcpy -s 10.22.35.66:5555
+```
+
+Always pass `-s`: with the physical device attached too, scrcpy would otherwise
+refuse to pick one.
 
 ## Using the app
 
@@ -112,7 +142,7 @@ the servers answer every name, as on any VPN app.
 ## Logs
 
 ```bash
-adb logcat -s ezvpn
+adb -s 10.22.35.66:5555 logcat -s ezvpn
 ```
 
 Both the Kotlin side and the Rust core log under the `ezvpn` tag.
