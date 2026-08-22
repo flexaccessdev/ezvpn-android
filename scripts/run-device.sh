@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 #
-# Build, install, launch, and watch the app on the development emulator.
+# Build, install, launch, and watch the app on the development device.
 #
-# All development happens on the adb-connected emulator (EMULATOR_SERIAL below,
-# an arm64 Android VM reachable over TCP).
+# The target is ADB_SERIAL, else EMULATOR_SERIAL (a shell default for a
+# development emulator/VM), else the single attached adb device. A host:port
+# serial is (re)connected first.
 #
 # By default the Rust core is rebuilt from the sibling ../ezvpn checkout for the
-# emulator's primary ABI (release profile) and the app links it via
+# device's primary ABI (release profile) and the app links it via
 # EZVPN_LOCAL_JNILIBS=1. Then the debug APK is installed, the app launched, and
 # logcat tailed for the `ezvpn` tag (Ctrl-C to stop watching; the app keeps
 # running).
@@ -16,7 +17,7 @@
 #   scripts/run-device.sh --no-core    # local core as last built, skip rebuild
 #   scripts/run-device.sh --pinned     # the pinned release core instead
 #   scripts/run-device.sh --no-log     # don't tail logcat
-#   ADB_SERIAL=<serial> scripts/run-device.sh   # another emulator
+#   ADB_SERIAL=<serial> scripts/run-device.sh   # pick a device
 #
 set -euo pipefail
 
@@ -35,23 +36,28 @@ for arg in "$@"; do
   esac
 done
 
-# The development emulator.
-EMULATOR_SERIAL="${EMULATOR_SERIAL:-10.22.35.66:5555}"
-
-ADB_SERIAL="${ADB_SERIAL:-$EMULATOR_SERIAL}"
+ADB_SERIAL="${ADB_SERIAL:-${EMULATOR_SERIAL:-}}"
+if [ -z "$ADB_SERIAL" ]; then
+  mapfile -t attached < <(adb devices | awk 'NR > 1 && $2 == "device" { print $1 }')
+  case "${#attached[@]}" in
+    1) ADB_SERIAL="${attached[0]}" ;;
+    0) echo "no device attached; set ADB_SERIAL=<serial> (see 'adb devices')" >&2; exit 1 ;;
+    *) echo "several devices attached (${attached[*]}); set ADB_SERIAL=<serial>" >&2; exit 1 ;;
+  esac
+fi
 # ANDROID_SERIAL makes Gradle's installDebug (and plain adb) use the same target
 # instead of failing/fanning out when several devices are attached.
 export ANDROID_SERIAL="$ADB_SERIAL"
 ADB=(adb -s "$ADB_SERIAL")
 
-# The emulator is reachable over TCP; (re)connect if adb has lost it.
+# A TCP serial: (re)connect if adb has lost it.
 case "$ADB_SERIAL" in
   *:*) adb connect "${ADB_SERIAL}" >/dev/null 2>&1 || true ;;
 esac
 adb devices
 state="$("${ADB[@]}" get-state 2>/dev/null || true)"
 if [ "$state" != "device" ]; then
-  echo "emulator $ADB_SERIAL is not ready (state: ${state:-absent}); start it / accept its USB-debugging prompt, or set ADB_SERIAL" >&2
+  echo "device $ADB_SERIAL is not ready (state: ${state:-absent}); start it / accept its USB-debugging prompt, or set ADB_SERIAL" >&2
   exit 1
 fi
 
@@ -60,7 +66,7 @@ if [ "$REBUILD_CORE" = 1 ]; then
   abi="${abilist%%,*}"
   case "$abi" in
     arm64-v8a|armeabi-v7a|x86_64|x86) ;;
-    *) echo "unsupported emulator ABI '$abi'" >&2; exit 1 ;;
+    *) echo "unsupported device ABI '$abi'" >&2; exit 1 ;;
   esac
   echo "== building libezvpn.so for $abi in ../ezvpn"
   (cd ../ezvpn && ABIS="$abi" ./build-android.sh release)

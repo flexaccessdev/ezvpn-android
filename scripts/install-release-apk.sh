@@ -2,10 +2,10 @@
 #
 # Install the signed release APK on a real device.
 #
-# The target is RELEASE_DEVICE_SERIAL (required; no default device). All
-# development, debug installs, and testing happen on the emulator via
-# scripts/run-device.sh. The script refuses unsigned APKs and refuses to target
-# the emulator.
+# The target is RELEASE_DEVICE_SERIAL (required; no default device). Development
+# and debug installs go through scripts/run-device.sh instead. The script
+# refuses unsigned APKs and, when EMULATOR_SERIAL is set, refuses to target that
+# development emulator.
 #
 # Usage (RELEASE_DEVICE_SERIAL=<serial> in front of each):
 #   scripts/install-release-apk.sh                 # dist/ezvpn-android-<versionName>.apk
@@ -20,7 +20,7 @@ set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
 
-EMULATOR_SERIAL="${EMULATOR_SERIAL:-10.22.35.66:5555}"
+EMULATOR_SERIAL="${EMULATOR_SERIAL:-}"
 RELEASE_DEVICE_SERIAL="${RELEASE_DEVICE_SERIAL:-}"
 [ -n "$RELEASE_DEVICE_SERIAL" ] || { echo "RELEASE_DEVICE_SERIAL=<serial> is required (see 'adb devices')" >&2; exit 1; }
 
@@ -37,7 +37,7 @@ for arg in "$@"; do
   esac
 done
 
-if [ "$RELEASE_DEVICE_SERIAL" = "$EMULATOR_SERIAL" ]; then
+if [ -n "$EMULATOR_SERIAL" ] && [ "$RELEASE_DEVICE_SERIAL" = "$EMULATOR_SERIAL" ]; then
   echo "refusing to install the release APK on the emulator $EMULATOR_SERIAL; it is for development only" >&2
   exit 1
 fi

@@ -23,10 +23,10 @@ Design and the JNI contract are documented in the core repo:
 - JDK 17, Android SDK with platform 37 and build-tools 37 (the Gradle wrapper
   brings Gradle itself; AGP 9 with built-in Kotlin).
 - An Android 10+ (`minSdk` 29) arm64 device (the app is arm64-v8a only, per
-  [Play's 64-bit requirement](https://developer.android.com/google/play/requirements/64-bit)). Development is done against the
-  emulator (`10.22.35.66:5555`, an arm64 Android VM bridged onto the LAN like a
-  phone; `adb connect 10.22.35.66`) — a `VpnService` cannot be exercised on the
-  JVM.
+  [Play's 64-bit requirement](https://developer.android.com/google/play/requirements/64-bit)). Development is done against an
+  adb-connected device — a phone, or an arm64 Android VM/emulator bridged onto
+  the LAN like a phone (`adb connect <host>`) — since a `VpnService` cannot be
+  exercised on the JVM.
 - For FFI work: the sibling `../ezvpn` checkout, the Android NDK and
   `cargo-ndk` (see that repo's `build-android.sh`).
 
@@ -43,7 +43,7 @@ the core repo (tag + sha256 in `gradle.properties`) and unpacks the
 ./gradlew :tunnelcore:test          # pure-Kotlin unit tests
 ./gradlew :app:testDebugUnitTest    # app-module JVM unit tests
 ./gradlew :app:assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
-ANDROID_SERIAL=10.22.35.66:5555 ./gradlew :app:installDebug   # debug install on the emulator
+ANDROID_SERIAL=<serial> ./gradlew :app:installDebug   # debug install on that device
 ```
 
 Pin a newer core release with `scripts/bump-jnilibs.sh <tag>` (rewrites the
@@ -86,28 +86,16 @@ it in the sibling checkout and set `EZVPN_LOCAL_JNILIBS=1` (only the exact
 value `1` opts in; anything else uses the release):
 
 ```bash
-(cd ../ezvpn && ABIS="arm64-v8a" ./build-android.sh release)   # the emulator is arm64
-EZVPN_LOCAL_JNILIBS=1 ANDROID_SERIAL=10.22.35.66:5555 ./gradlew :app:installDebug
+(cd ../ezvpn && ABIS="arm64-v8a" ./build-android.sh release)
+EZVPN_LOCAL_JNILIBS=1 ANDROID_SERIAL=<serial> ./gradlew :app:installDebug
 ```
 
-`scripts/run-device.sh` does all of it on the emulator — builds the core for
-its ABI, installs the debug APK, launches the app, and tails `logcat` for the
-`ezvpn` tag (`--pinned` skips the local core and uses the release, `--no-core`
-skips rebuilding it, `ADB_SERIAL` picks another emulator).
-
-### Watching the emulator screen
-
-[scrcpy](https://github.com/Genymobile/scrcpy) mirrors and controls the
-emulator (tap, type, paste) from the desktop; it is a LAN device like a phone,
-so it is reached by serial:
-
-```bash
-adb connect 10.22.35.66
-scrcpy -s 10.22.35.66:5555
-```
-
-Always pass `-s`: with more than one device attached, scrcpy would otherwise
-refuse to pick one.
+`scripts/run-device.sh` does all of it — builds the core for the device's ABI,
+installs the debug APK, launches the app, and tails `logcat` for the `ezvpn`
+tag (`--pinned` skips the local core and uses the release, `--no-core` skips
+rebuilding it). It targets `ADB_SERIAL`, else `EMULATOR_SERIAL` (a convenient
+shell default for a development emulator/VM), else the single attached device;
+a `host:port` serial is (re)connected first.
 
 ## Using the app
 
@@ -142,7 +130,43 @@ the servers answer every name, as on any VPN app.
 ## Logs
 
 ```bash
-adb -s 10.22.35.66:5555 logcat -s ezvpn
+adb logcat -s ezvpn          # add -s <serial> with several devices attached
 ```
 
 Both the Kotlin side and the Rust core log under the `ezvpn` tag.
+
+## Seeing and driving a device from a terminal
+
+Useful when the device is remote (wireless adb, a VM, an emulator reached over
+an ssh port forward) or when a script needs to watch the screen.
+
+**Screenshots** — `adb exec-out screencap -p > shot.png` works everywhere and
+needs no display. If an X display is available (a desktop session on the build
+host), mirror the device with [scrcpy](https://github.com/Genymobile/scrcpy)
+and capture its window with [scrot](https://github.com/resurrecting-open-source-projects/scrot):
+
+```bash
+DISPLAY=:0 scrcpy -s <serial> --window-title dev --max-size 1000 &   # live mirror (always -s: scrcpy refuses to pick among several devices)
+WID=$(DISPLAY=:0 xdotool search --name '^dev$' | head -1)
+DISPLAY=:0 scrot -o -w "$WID" shot.png      # just the device window (-o overwrites)
+DISPLAY=:0 scrot -o shot.png                # the whole desktop
+```
+
+scrcpy keyboard shortcuts sent to that window reach the device (`xdotool key
+--window "$WID" alt+n` opens the notification shade), but synthetic xdotool
+mouse clicks do not register in scrcpy's SDL window — drive the device with
+adb instead:
+
+```bash
+adb shell input tap X Y                 # coordinates in device pixels
+adb shell input text 'hello%sworld'     # %s for a space
+adb shell input keyevent KEYCODE_BACK   # keyevent 111 (ESCAPE) hides the keyboard without navigating back
+adb shell 'uiautomator dump /sdcard/ui.xml >/dev/null; cat /sdcard/ui.xml'  # widget tree with bounds
+```
+
+`uiautomator dump` sees Compose text and content descriptions with their
+bounds, which is enough to find a field or button to tap. Two Compose quirks:
+an unfocused text field is best tapped a little below its label's top edge, and
+pressing BACK to dismiss the keyboard also dismisses a Compose dialog — tap the
+dialog's button instead. Emulators with Gboard show a one-time "Try out your
+stylus" sheet over the first text field; it swallows taps until cancelled.
