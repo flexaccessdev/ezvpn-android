@@ -26,7 +26,9 @@ Design and the JNI contract are documented in the core repo:
   [Play's 64-bit requirement](https://developer.android.com/google/play/requirements/64-bit)). Development is done against an
   adb-connected device — a phone, or an arm64 Android VM/emulator bridged onto
   the LAN like a phone (`adb connect <host>`) — since a `VpnService` cannot be
-  exercised on the JVM.
+  exercised on the JVM. The Android Studio emulator is NATed twice by default
+  and only ever gets relay paths; see [Emulator networking](#emulator-networking-bridged-wi-fi-for-direct-paths)
+  for the flags that put it on the LAN.
 - For FFI work: the sibling `../ezvpn` checkout, the Android NDK and
   `cargo-ndk` (see that repo's `build-android.sh`).
 
@@ -140,6 +142,56 @@ adb logcat -s ezvpn          # add -s <serial> with several devices attached
 ```
 
 Both the Kotlin side and the Rust core log under the `ezvpn` tag.
+
+## Emulator networking: bridged Wi-Fi for direct paths
+
+Out of the box the Android Studio emulator (36.5+) is relay-only for ezvpn:
+its Wi-Fi goes through the network simulator's own user-mode NAT (`netsim`,
+feature `WiFiPacketStream`), and the host usually NATs once more, so iroh never
+finds a direct path and every "Connection path" readout says relay. Routing,
+bypass and split-DNS logic still work, but latency/path testing does not.
+
+`-vmnet-bridged` on its own does not fix it: it only re-backs the emulated
+*cellular* interface (`eth0`, hard-wired to `10.0.2.x`), because Wi-Fi frames
+never reach the QEMU network device while `WiFiPacketStream` is on. Turn that
+feature off as well and Wi-Fi (`wlan0`) is bridged onto the host's LAN, gets a
+real DHCP lease / SLAAC prefix, and Android makes it the validated default
+network — with a stock Play Store image, no root needed:
+
+```bash
+# macOS, Apple silicon (vmnet bridged mode needs root); en0/en8 = the host's LAN interface
+sudo ~/Library/Android/sdk/emulator/emulator -avd Pixel_9_API_37 -port 5554 -grpc 8554 -gpu host \
+    -no-snapshot-load -no-snapshot-save \
+    -feature -WiFiPacketStream -vmnet-bridged en0
+```
+
+On Linux the equivalent is `-feature -WiFiPacketStream -wifi-tap tap0` with
+`tap0` bridged to the LAN interface (per `emulator -help-all`; not exercised
+here). Verify from the guest:
+
+```bash
+adb shell ip -br addr show wlan0                      # a LAN address, not 10.0.2.x
+adb shell 'dumpsys connectivity | grep "Active default"'   # the WIFI network
+adb shell ping -c 2 <lan-gateway>
+```
+
+then connect a profile and open its "Connection path" readout — it should show
+a direct path. Verified with emulator 37.1.11 and the API 37
+`google_apis_playstore` arm64 image.
+
+Notes:
+
+- Running under `sudo` leaves root-owned files in the AVD directory
+  (`~/.android/avd/<name>.avd`: snapshots, locks, `hardware-qemu.ini`); a later
+  non-sudo start that fails on permissions is that.
+- Always pass both `-no-snapshot-*` flags: a stale Quick Boot snapshot fails to
+  load with a `goldfish_pipe` error.
+- A remote emulator's adb port is loopback-only; forward it
+  (`ssh -f -N -L 15555:127.0.0.1:5555 <host>`, then `adb connect 127.0.0.1:15555`).
+- If `adb root` is needed as well, use a `userdebug` image:
+  `system-images;android-37.0;google_apis;arm64-v8a` or the pure-AOSP
+  `system-images;android-36;default;arm64-v8a` (no API 37 `default` image
+  exists). The `google_apis_playstore` images are `user` builds.
 
 ## Seeing and driving a device from a terminal
 
