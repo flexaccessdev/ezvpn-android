@@ -56,8 +56,14 @@ every push/PR as the `app-debug` workflow artifact.
 
 ```bash
 scripts/build-release-apk.sh            # → dist/ezvpn-android-<version>.apk
+scripts/build-release-apk.sh --bundle   # → dist/ezvpn-android-<version>.aab (for Play Console)
 scripts/build-release-apk.sh --unsigned # no signing (not installable as is)
 ```
+
+Google Play only accepts an App Bundle (`.aab`), on every track including
+internal testing; `--bundle` builds one signed with the same keystore (Play
+App Signing uses it as the upload key). Every upload needs a higher
+`ezvpn.versionCode` in `gradle.properties`.
 
 The release key is a keystore outside the repo (default
 `~/.config/ezvpn-android/release.jks`, override with `EZVPN_KEYSTORE`;
