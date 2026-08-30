@@ -89,7 +89,11 @@ android {
         // change, the package of that class cannot.
         applicationId = "dev.flexaccess.ezvpn"
         minSdk = 29
-        targetSdk = 37
+        // Target Android 15. Android 16+ (targetSdk 36/37) phases in local
+        // network protection, which would make LAN access (the split-tunnel
+        // overlap check, direct iroh paths to a same-LAN server) a runtime
+        // permission on top of the VPN consent. compileSdk stays current.
+        targetSdk = 35
         versionCode = providers.gradleProperty("ezvpn.versionCode").get().toInt()
         versionName = providers.gradleProperty("ezvpn.versionName").get()
 
@@ -142,6 +146,11 @@ android {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+    }
+
+    lint {
+        // targetSdk 35 is deliberate (see defaultConfig).
+        disable += "OldTargetApi"
     }
 }
 
