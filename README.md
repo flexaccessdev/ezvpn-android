@@ -22,9 +22,10 @@ Design and the JNI contract are documented in the core repo:
 
 - JDK 17, Android SDK with platform 37 and build-tools 37 (the Gradle wrapper
   brings Gradle itself; AGP 9 with built-in Kotlin).
-- An Android 10+ (`minSdk` 29) arm64 device (the app is arm64-v8a only, per
+- An Android 10+ (`minSdk` 29) 64-bit device: arm64-v8a or x86_64 (32-bit is
+  not supported, per
   [Play's 64-bit requirement](https://developer.android.com/google/play/requirements/64-bit)). Development is done against an
-  adb-connected device — a phone, or an arm64 Android VM/emulator bridged onto
+  adb-connected device — a phone, or an Android VM/emulator bridged onto
   the LAN like a phone (`adb connect <host>`) — since a `VpnService` cannot be
   exercised on the JVM. The Android Studio emulator is NATed twice by default
   and only ever gets relay paths; see [Emulator networking](#emulator-networking-bridged-wi-fi-for-direct-paths)
