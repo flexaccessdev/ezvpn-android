@@ -93,10 +93,11 @@ android {
         versionCode = providers.gradleProperty("ezvpn.versionCode").get().toInt()
         versionName = providers.gradleProperty("ezvpn.versionName").get()
 
-        // arm64 only (Google Play's 64-bit requirement; 32-bit devices are not
-        // supported). Only lib/arm64-v8a/libezvpn.so from the core zip is
-        // packaged, so the APK refuses to install on any other ABI.
-        ndk { abiFilters.add("arm64-v8a") }
+        // 64-bit only (Google Play's 64-bit requirement; 32-bit devices are
+        // not supported): arm64-v8a for phones plus x86_64 for VMs/emulators.
+        // Only these ABIs' libezvpn.so from the core zip are packaged, so the
+        // APK refuses to install anywhere else.
+        ndk { abiFilters.addAll(listOf("arm64-v8a", "x86_64")) }
     }
 
     // Release signing comes from the environment (scripts/build-release-apk.sh
