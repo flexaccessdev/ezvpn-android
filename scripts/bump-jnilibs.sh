@@ -1,44 +1,14 @@
 #!/usr/bin/env bash
-#
-# Pin the app to a published ezvpn release: download that tag's
-# libezvpn-android.zip, compute its sha256, and rewrite gradle.properties
-# (ezvpn.releaseTag, ezvpn.releaseSha256, ezvpn.versionName from the tag's
-# numeric part; ezvpn.versionCode is bumped by one).
-#
-# Usage: scripts/bump-jnilibs.sh v0.0.42
-#
+# Thin wrapper: the logic lives in the sibling devtools repo, parameterized by
+# this repo's .devtools.conf.
 set -euo pipefail
-
-cd "$(dirname "${BASH_SOURCE[0]}")/.."
-
-tag="${1:-}"
-if [ -z "$tag" ]; then
-  echo "usage: $0 <release tag, e.g. v0.0.42>" >&2
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+devtools="${DEVTOOLS_DIR:-$repo_root/../devtools}"
+[ -f "$devtools/android/bump-jnilibs.sh" ] || {
+  printf '%s\n' \
+    "error: devtools not found at $devtools" \
+    "  git clone git@github.com:andrewtheguy/devtools.git $repo_root/../devtools" \
+    "  (or set DEVTOOLS_DIR)" >&2
   exit 1
-fi
-url="https://github.com/flexaccessdev/ezvpn/releases/download/$tag/libezvpn-android.zip"
-tmp="$(mktemp)"
-trap 'rm -f "$tmp"' EXIT
-
-echo "Downloading $url"
-curl -fsSL -o "$tmp" "$url"
-if command -v sha256sum >/dev/null 2>&1; then
-  sha="$(sha256sum "$tmp" | cut -d' ' -f1)"
-else
-  sha="$(shasum -a 256 "$tmp" | cut -d' ' -f1)"   # macOS
-fi
-version="${tag#v}"
-code="$(sed -n 's/^ezvpn.versionCode=\([0-9]*\)$/\1/p' gradle.properties)"
-code=$((${code:-0} + 1))
-
-# -i.bak works on both GNU and BSD sed (bare -i does not).
-sed -i.bak \
-  -e "s|^ezvpn.releaseTag=.*|ezvpn.releaseTag=$tag|" \
-  -e "s|^ezvpn.releaseSha256=.*|ezvpn.releaseSha256=$sha|" \
-  -e "s|^ezvpn.versionName=.*|ezvpn.versionName=$version|" \
-  -e "s|^ezvpn.versionCode=.*|ezvpn.versionCode=$code|" \
-  gradle.properties
-rm -f gradle.properties.bak
-
-echo "Pinned $tag (sha256 $sha), versionName $version, versionCode $code"
-grep '^ezvpn\.' gradle.properties
+}
+DEVTOOLS_REPO_ROOT="$repo_root" exec "$devtools/android/bump-jnilibs.sh" "$@"
