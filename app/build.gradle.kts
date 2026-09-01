@@ -90,8 +90,13 @@ android {
         applicationId = "dev.flexaccess.ezvpn"
         minSdk = 29
         targetSdk = 37
+        // The app's own version (gradle.properties), independent of the core pin.
         versionCode = providers.gradleProperty("ezvpn.versionCode").get().toInt()
         versionName = providers.gradleProperty("ezvpn.versionName").get()
+        // The pinned libezvpn release, shown next to the app version in the UI.
+        // A local FFI build (EZVPN_LOCAL_JNILIBS) still reports the pinned
+        // number: the local .so carries none.
+        buildConfigField("String", "EZVPN_CORE_VERSION", "\"${ezvpnReleaseTag.removePrefix("v")}\"")
 
         // 64-bit only (Google Play's 64-bit requirement; 32-bit devices are
         // not supported): arm64-v8a for phones plus x86_64 for VMs/emulators.

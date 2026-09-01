@@ -66,7 +66,10 @@ scripts/build-release-apk.sh --unsigned # no signing (not installable as is)
 Google Play only accepts an App Bundle (`.aab`), on every track including
 internal testing; `--bundle` builds one signed with the same keystore (Play
 App Signing uses it as the upload key). Every upload needs a higher
-`ezvpn.versionCode` in `gradle.properties`.
+`ezvpn.versionCode` in `gradle.properties`. The app's `ezvpn.versionName` /
+`ezvpn.versionCode` are its own and independent of the pinned `ezvpn` release:
+`scripts/bump-jnilibs.sh` only re-pins the core, whose version the app shows
+next to its own.
 
 The release key is a keystore outside the repo (default
 `~/.config/ezvpn-android/release.jks`, override with `EZVPN_KEYSTORE`;
