@@ -63,7 +63,7 @@ fun TunnelListScreen(
         },
         bottomBar = {
             Text(
-                stringResource(R.string.tunnel_list_version, BuildConfig.VERSION_NAME),
+                stringResource(R.string.tunnel_list_version, BuildConfig.VERSION_NAME, BuildConfig.EZVPN_CORE_VERSION),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
